@@ -14,10 +14,10 @@ export const createTodo = async (req, res) => {
       [title, description]
     );
     console.log(newTodo.rows[0]);
-    if (!newTodo.rows[0].length === 0) {
+    if (newTodo.rows.length === 0) {
       throw new Error("failed to create new todo");
     }
-    return res.status(200).json({ success: true, data: newTodo.rows[0] });
+    return res.status(200).json({ success: true, data: newTodo.rows });
   } catch (error) {
     return res.status(500).json({ success: false, message: error });
   }
@@ -26,7 +26,7 @@ export const createTodo = async (req, res) => {
 export const getTodos = async (req, res) => {
   try {
     const allTodos = await pool.query("SELECT * FROM todos ORDER BY title ASC");
-    if (!allTodos) {
+    if (allTodos.rows[0].length === 0) {
       return res.status(404).json({
         success: false,
         message: "empty todos",
@@ -41,48 +41,90 @@ export const getTodos = async (req, res) => {
   }
 };
 
-export const updatetodo = async (req, res) => {
+export const updateTodo = async (req, res) => {
   const { title, description, completed, created_at } = req.body;
 
-  const { id } = req.params;
-  console.log(id);
+  const { id } = req.id;
+
   const fields = [];
   const values = [];
-  let index = 1;
+  let index = 0;
 
   if (title != undefined) {
-    fields.push(`title=$${index++}`);
+    fields.push(`title=$${++index}`);
     values.push(title);
-    console.log("title: " + index);
   }
   if (description != undefined) {
-    fields.push(`description=$${index++}`);
+    fields.push(`description=$${++index}`);
     values.push(description);
-    console.log("description: " + index);
   }
   if (completed != undefined) {
-    fields.push(`completed=$${index++}`);
+    fields.push(`completed=$${++index}`);
     values.push(completed);
-    console.log("completed: " + index);
   }
   if (created_at != undefined) {
-    fields.push(`created_at=$${index++}`);
+    fields.push(`created_at=$${++index}`);
     values.push(created_at);
-    console.log("created_at: " + index);
   }
 
   try {
-    const returned = await pool.query(
+    const updatedTodo = await pool.query(
       `UPDATE todos SET ${fields.join(
         ", "
-      )} WHERE todo_id=$${index} RETURNING *`,
-
+      )} WHERE todo_id=$${++index} RETURNING *`,
       [...values, id]
     );
-    if (returned.rows.length != 0) {
-      console.log(returned);
+    if (updatedTodo.rows.length === 0) {
+      throw new Error(`Failed to update Todo with ID ${id}`);
     }
+    return res.status(200).json({
+      success: true,
+      data: updatedTodo.rows[0],
+    });
   } catch (error) {
-    console.error("failed to update data at: " + error);
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const deleteTodo = async (req, res) => {
+  const { id } = req.id;
+
+  try {
+    const removeTodo = await pool.query(
+      `DELETE FROM todos WHERE todo_id=$1 RETURNING *`,
+      [id]
+    );
+    if (removeTodo.rows.length === 0) {
+      throw new Error(`Failed to delete todo with ID ${id}`);
+    }
+    return res.status(204).end();
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const singleTodo = async (req, res) => {
+  const { id } = req.id;
+  console.log(id);
+
+  try {
+    const todo = await pool.query(`SELECT * FROM todos WHERE todo_id=$1 `, [
+      id,
+    ]);
+    if (todo.rows.length === 0) {
+      throw new Error(`Failed to fetch todo with ID ${id}`);
+    }
+    res.status(200).json({ success: true, data: todo.rows[0] });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
